@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LexiconBot - Interactive Topic Learning Assistant</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- Marked.js & DOMPurify for clean Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        /* Clean Markdown styling inside AI bubbles */
+        .prose-ai h1, .prose-ai h2, .prose-ai h3 {
+            font-weight: 700;
+            margin-top: 0.75rem;
+            margin-bottom: 0.4rem;
+            line-height: 1.35;
+        }
+        .prose-ai h1:first-child, .prose-ai h2:first-child, .prose-ai h3:first-child {
+            margin-top: 0;
+        }
+        .prose-ai p {
+            margin-bottom: 0.6rem;
+            line-height: 1.6;
+        }
+        .prose-ai p:last-child {
+            margin-bottom: 0;
+        }
+        .prose-ai ul, .prose-ai ol {
+            padding-left: 1.25rem;
+            margin-bottom: 0.6rem;
+        }
+        .prose-ai ul {
+            list-style-type: disc;
+        }
+        .prose-ai ol {
+            list-style-type: decimal;
+        }
+        .prose-ai li {
+            margin-bottom: 0.3rem;
+            line-height: 1.55;
+        }
+        .prose-ai strong {
+            font-weight: 600;
+            color: #1d4ed8;
+        }
+        @media (prefers-color-scheme: dark) {
+            .prose-ai strong {
+                color: #60a5fa;
+            }
+        }
+        .prose-ai code {
+            background-color: rgba(148, 163, 184, 0.18);
+            padding: 0.15rem 0.35rem;
+            border-radius: 0.375rem;
+            font-size: 0.875em;
+        }
+        @keyframes pulseDot {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+        .typing-dot {
+            animation: pulseDot 1.4s infinite ease-in-out both;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 h-screen flex flex-col overflow-hidden selection:bg-blue-500 selection:text-white">
+
+    <!-- Toast Notification Banner -->
+    <div id="toastContainer" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 -translate-y-2 transition-all duration-200">
+        <div class="bg-slate-900 dark:bg-slate-800 text-white text-xs font-medium px-3.5 py-2 rounded-full shadow-lg border border-slate-700/70">
+            <span id="toastText">Notification</span>
+        </div>
+    </div>
+
+    <!-- Top Navigation / Header -->
+    <header class="flex-none bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3 z-10">
+        <div class="max-w-4xl mx-auto flex items-center justify-between">
+            <!-- Brand & Small Clean-Shaven Avatar -->
+            <div class="flex items-center space-x-2.5">
+                <div class="w-6 h-6 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 p-0.5 flex items-center justify-center text-white shadow-sm overflow-hidden flex-none">
+                    <img data-bot-avatar alt="LexiconBot Avatar" class="w-full h-full object-cover object-top rounded-[6px]" />
+                </div>
+                <div class="flex items-center space-x-2">
+                    <h1 class="font-semibold text-sm sm:text-base tracking-tight text-slate-900 dark:text-white leading-tight">
+                        LexiconBot
+                    </h1>
+                    <!-- Active Topic Pill -->
+                    <span id="topicBadge" class="hidden items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/80">
+                        Topic: <strong id="topicBadgeText" class="ml-1 font-semibold"></strong>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Reset Conversation Action -->
+            <div class="flex items-center space-x-2">
+                <button id="clearBtn" type="button" class="inline-flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors" title="Reset Conversation">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    <span>Reset</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Scrollable Chat Area -->
+    <main id="chatContainer" class="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
+        <div class="max-w-3xl mx-auto min-h-full flex flex-col">
+
+            <!-- Welcome Screen with Large Full-Face Portrait -->
+            <div id="welcomeScreen" class="my-auto py-4 sm:py-6 flex flex-col items-center text-center">
+                <div class="w-44 h-44 sm:w-52 sm:h-52 rounded-3xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-purple-500 p-1 flex items-center justify-center text-white shadow-xl shadow-blue-500/20 mb-5 overflow-hidden flex-none">
+                    <img data-bot-avatar alt="Smiling Animated Long-Haired Male Bot Avatar" class="w-full h-full object-cover object-top rounded-[20px]" />
+                </div>
+                <p class="text-xl sm:text-2xl font-medium leading-relaxed text-slate-700 dark:text-slate-200 max-w-2xl">
+                    Enter any topic below to get a clear explanation, then choose one of the 4 learning options to explore further.
+                </p>
+            </div>
+
+            <!-- Dynamic Messages List -->
+            <div id="messagesList" class="hidden flex-col space-y-4 pb-4"></div>
+
+            <!-- Animated Typing Indicator -->
+            <div id="typingIndicator" class="hidden items-start space-x-2.5 pb-4">
+                <div class="w-5 h-5 rounded-md bg-gradient-to-tr from-blue-600 to-indigo-500 p-0.5 flex items-center justify-center text-white flex-none shadow-sm mt-1 overflow-hidden">
+                    <img data-bot-avatar alt="Bot Avatar" class="w-full h-full object-cover object-top rounded-[4px]" />
+                </div>
+                <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm flex items-center space-x-1.5">
+                    <span class="w-2 h-2 rounded-full bg-blue-500 typing-dot"></span>
+                    <span class="w-2 h-2 rounded-full bg-blue-500 typing-dot"></span>
+                    <span class="w-2 h-2 rounded-full bg-blue-500 typing-dot"></span>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Bottom Option A Action Buttons & Input Bar -->
+    <footer class="flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 px-4 sm:px-6 pt-3 pb-4">
+        <div class="max-w-3xl mx-auto space-y-3">
+
+            <!-- Main Prompt Above the Typing Box -->
+            <div class="text-center">
+                <h2 class="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+                    What topic is of your interest?
+                </h2>
+            </div>
+
+            <!-- Message Input Form (Directly Below the Question) -->
+            <form id="chatForm" class="relative flex items-end bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 focus-within:border-blue-500 dark:focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                <textarea
+                    id="messageInput"
+                    rows="1"
+                    placeholder="Enter a topic of your interest (e.g., Energy, Solar System, AI)..."
+                    class="w-full bg-transparent text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 text-sm sm:text-base px-4 py-3 pr-12 resize-none focus:outline-none max-h-36 leading-relaxed"
+                ></textarea>
+                <button
+                    id="sendBtn"
+                    type="submit"
+                    disabled
+                    aria-label="Send message"
+                    class="absolute right-2 bottom-2 p-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white disabled:text-slate-500 dark:disabled:text-slate-400 transition-colors shadow-xs disabled:cursor-not-allowed"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7"></path>
+                    </svg>
+                </button>
+            </form>
+
+            <!-- Option A: 4 Interactive Action Buttons (2x2 Grid) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button type="button" onclick="triggerQuickAction('concepts')" class="quick-action-btn group flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-blue-50 dark:hover:bg-blue-950/50 border border-slate-200 dark:border-slate-700/80 hover:border-blue-300 dark:hover:border-blue-700 text-left transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span class="w-6 h-6 rounded-lg bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 flex items-center justify-center text-xs font-bold flex-none group-hover:scale-105 transition-transform">1</span>
+                    <span class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 group-hover:text-blue-700 dark:group-hover:text-blue-300">1. Key concepts</span>
+                </button>
+
+                <button type="button" onclick="triggerQuickAction('phrases')" class="quick-action-btn group flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 border border-slate-200 dark:border-slate-700/80 hover:border-indigo-300 dark:hover:border-indigo-700 text-left transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span class="w-6 h-6 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 flex items-center justify-center text-xs font-bold flex-none group-hover:scale-105 transition-transform">2</span>
+                    <span class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">2. Short phrases</span>
+                </button>
+
+                <button type="button" onclick="triggerQuickAction('story')" class="quick-action-btn group flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 border border-slate-200 dark:border-slate-700/80 hover:border-emerald-300 dark:hover:border-emerald-700 text-left transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span class="w-6 h-6 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 flex items-center justify-center text-xs font-bold flex-none group-hover:scale-105 transition-transform">3</span>
+                    <span class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">3. Read a story</span>
+                </button>
+
+                <button type="button" onclick="triggerQuickAction('slides')" class="quick-action-btn group flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-amber-50 dark:hover:bg-amber-950/50 border border-slate-200 dark:border-slate-700/80 hover:border-amber-300 dark:hover:border-amber-700 text-left transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span class="w-6 h-6 rounded-lg bg-amber-100 dark:bg-amber-900/60 text-amber-600 dark:text-amber-300 flex items-center justify-center text-xs font-bold flex-none group-hover:scale-105 transition-transform">4</span>
+                    <span class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 group-hover:text-amber-700 dark:group-hover:text-amber-300">4. Show slides</span>
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // API Configuration & State
+        const apiKey = "AQ.Ab8RN6JwD84N6pvdzGXoYAit3sxv-FOYhbSDlQbsgEy1nWD35w"; // Canvas provides the API key at runtime
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+        const IMAGE_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`;
+
+        const SYSTEM_INSTRUCTION = {
+            parts: [{
+                text: "You are LexiconBot, a warm, encouraging, and clear educational assistant. Format responses cleanly with Markdown headings, bullet points, and bold text where helpful."
+            }]
+        };
+
+        // Crisp inline SVG illustration of the smiling, clean-shaven animated young man with long light brown hair
+        const FALLBACK_AVATAR_SVG = `data:image/svg+xml;utf8,` + encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+                <defs>
+                    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#3b82f6"/>
+                        <stop offset="100%" stop-color="#1e3a8a"/>
+                    </linearGradient>
+                    <linearGradient id="hair" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#b6895b"/>
+                        <stop offset="100%" stop-color="#7c532e"/>
+                    </linearGradient>
+                </defs>
+                <rect x="0" y="0" width="200" height="200" fill="url(#bg)"/>
+                <!-- Back Long Flowing Light Brown Hair -->
+                <path d="M40 82 C28 132, 34 178, 52 198 L148 198 C166 178, 172 132, 160 82 C154 32, 46 32, 40 82 Z" fill="url(#hair)"/>
+                <!-- Hoodie Shoulders -->
+                <path d="M24 200 C32 162, 66 150, 100 150 C134 150, 168 162, 176 200 Z" fill="#134e4a"/>
+                <path d="M74 152 L100 176 L126 152" fill="none" stroke="#2dd4bf" stroke-width="4" stroke-linecap="round"/>
+                <!-- Long Hair Locks Cascading Over Shoulders -->
+                <path d="M42 96 C36 136, 40 172, 54 196 L68 196 C60 166, 60 132, 64 102 Z" fill="url(#hair)"/>
+                <path d="M158 96 C164 136, 160 172, 146 196 L132 196 C140 166, 140 132, 136 102 Z" fill="url(#hair)"/>
+                <!-- Neck -->
+                <rect x="86" y="124" width="28" height="32" rx="10" fill="#f3b695"/>
+                <!-- Clean-Shaven Face -->
+                <path d="M62 82 C62 124, 78 138, 100 138 C122 138, 138 124, 138 82 C138 52, 62 52, 62 82 Z" fill="#f9c6a8"/>
+                <!-- Rosy Cheeks -->
+                <ellipse cx="74" cy="104" rx="7" ry="4" fill="#f43f5e" opacity="0.28"/>
+                <ellipse cx="126" cy="104" rx="7" ry="4" fill="#f43f5e" opacity="0.28"/>
+                <!-- Eyebrows -->
+                <path d="M72 78 Q82 73 91 78" fill="none" stroke="#5c3a1e" stroke-width="3.5" stroke-linecap="round"/>
+                <path d="M109 78 Q118 73 128 78" fill="none" stroke="#5c3a1e" stroke-width="3.5" stroke-linecap="round"/>
+                <!-- Big Friendly Eyes -->
+                <circle cx="82" cy="89" r="6.5" fill="#422006"/>
+                <circle cx="118" cy="89" r="6.5" fill="#422006"/>
+                <circle cx="84" cy="87" r="2.2" fill="#ffffff"/>
+                <circle cx="120" cy="87" r="2.2" fill="#ffffff"/>
+                <!-- Nose -->
+                <path d="M100 91 L97 102 L103 103" fill="none" stroke="#d9906c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <!-- Big Bright Smile -->
+                <path d="M80 112 Q100 132 120 112 Z" fill="#ffffff"/>
+                <path d="M80 112 Q100 132 120 112" fill="none" stroke="#9f1239" stroke-width="2.5" stroke-linecap="round"/>
+                <!-- Front Wavy Locks -->
+                <path d="M52 86 C50 40, 96 28, 128 42 C148 50, 154 76, 148 96 C142 72, 126 60, 104 58 C80 56, 62 70, 52 86 Z" fill="url(#hair)"/>
+            </svg>
+        `);
+
+        /**
+         * Builds a colorful kids' storybook SVG illustration fallback if the AI image API is unavailable
+         */
+        function buildKidsStoryFallbackSvg(topic) {
+            const safeTopic = (topic || 'Adventure').slice(0, 32).replace(/[<>&"']/g, '');
+            return `data:image/svg+xml;utf8,` + encodeURIComponent(`
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450">
+                    <defs>
+                        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#38bdf8"/>
+                            <stop offset="100%" stop-color="#bae6fd"/>
+                        </linearGradient>
+                        <linearGradient id="hills" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#4ade80"/>
+                            <stop offset="100%" stop-color="#16a34a"/>
+                        </linearGradient>
+                    </defs>
+                    <rect width="800" height="450" fill="url(#sky)"/>
+                    <!-- Smiling Sun -->
+                    <circle cx="670" cy="95" r="46" fill="#fde047"/>
+                    <circle cx="656" cy="88" r="4" fill="#854d0e"/>
+                    <circle cx="684" cy="88" r="4" fill="#854d0e"/>
+                    <path d="M656 105 Q670 118 684 105" fill="none" stroke="#854d0e" stroke-width="3.5" stroke-linecap="round"/>
+                    <!-- Fluffy Clouds -->
+                    <g fill="#ffffff" opacity="0.9">
+                        <circle cx="150" cy="95" r="28"/><circle cx="182" cy="88" r="34"/><circle cx="218" cy="96" r="26"/>
+                        <circle cx="420" cy="75" r="22"/><circle cx="448" cy="70" r="28"/><circle cx="476" cy="76" r="20"/>
+                    </g>
+                    <!-- Rolling Hills -->
+                    <path d="M0 320 Q200 240 420 310 T800 290 L800 450 L0 450 Z" fill="#86efac"/>
+                    <path d="M0 350 Q260 280 540 340 T800 330 L800 450 L0 450 Z" fill="url(#hills)"/>
+                    <!-- Open Storybook Illustration -->
+                    <g transform="translate(260, 175)">
+                        <path d="M10 140 Q140 115 140 145 Q140 115 270 140 L285 45 Q140 20 140 50 Q140 20 -5 45 Z" fill="#ffffff" stroke="#f59e0b" stroke-width="5"/>
+                        <line x1="140" y1="50" x2="140" y2="145" stroke="#fbbf24" stroke-width="3"/>
+                        <!-- Stars Rising from Book -->
+                        <polygon points="140,-15 146,2 164,2 150,12 155,29 140,19 125,29 130,12 116,2 134,2" fill="#facc15"/>
+                        <circle cx="95" cy="12" r="6" fill="#f472b6"/>
+                        <circle cx="188" cy="8" r="6" fill="#60a5fa"/>
+                    </g>
+                    <!-- Topic Banner -->
+                    <rect x="200" y="368" width="400" height="44" rx="22" fill="#ffffff" opacity="0.92"/>
+                    <text x="400" y="396" font-family="sans-serif" font-size="18" font-weight="700" fill="#1e3a8a" text-anchor="middle">Story Time: ${safeTopic}</text>
+                </svg>
+            `);
+        }
+
+        let currentBotAvatarUrl = FALLBACK_AVATAR_SVG;
+        let conversationHistory = [];
+        let currentTopic = "";
+        let isGenerating = false;
+
+        // DOM Elements (initialized safely on DOMContentLoaded)
+        let chatContainer, welcomeScreen, messagesList, typingIndicator;
+        let chatForm, messageInput, sendBtn, clearBtn;
+        let topicBadge, topicBadgeText, toastContainer, toastText;
+        let toastTimeout = null;
+
+        /**
+         * Applies the current avatar image URL to all bot avatar elements on the page
+         */
+        function applyBotAvatar(url) {
+            currentBotAvatarUrl = url;
+            document.querySelectorAll('[data-bot-avatar]').forEach(img => {
+                img.src = url;
+            });
+        }
+
+        /**
+         * Generates the clean-shaven animated male avatar with long light brown hair using Gemini Image API
+         */
+        async function loadGeneratedBotAvatar() {
+            const payload = {
+                contents: [{
+                    role: 'user',
+                    parts: [{
+                        text: "3D Pixar-style animated head-and-shoulders portrait avatar of a handsome, cheerful young man with long shoulder-length wavy light brown hair cascading down past his shoulders, completely clean-shaven smooth face with zero facial hair, warm brown eyes, a big bright open smile, wearing a sleek teal tech hoodie, soft blue futuristic background, centered medium portrait showing full head, hair, face, and shoulders clearly."
+                    }]
+                }],
+                generationConfig: {
+                    responseModalities: ['IMAGE'],
+                    imageConfig: { aspectRatio: "1:1" }
+                }
+            };
+
+            let delay = 1000;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    const response = await fetch(IMAGE_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) {
+                        if ((response.status === 429 || response.status >= 500) && attempt < 2) {
+                            await new Promise(r => setTimeout(r, delay));
+                            delay *= 2;
+                            continue;
+                        }
+                        return;
+                    }
+                    const result = await response.json();
+                    const part = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                    if (part?.inlineData?.data) {
+                        const imageUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+                        applyBotAvatar(imageUrl);
+                    }
+                    return;
+                } catch (e) {
+                    if (attempt === 2) return;
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        /**
+         * Shows a temporary toast notification
+         */
+        function showToast(message) {
+            if (!toastContainer || !toastText) return;
+            toastText.textContent = message;
+            toastContainer.classList.remove('opacity-0', '-translate-y-2');
+            toastContainer.classList.add('opacity-100', 'translate-y-0');
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toastContainer.classList.remove('opacity-100', 'translate-y-0');
+                toastContainer.classList.add('opacity-0', '-translate-y-2');
+            }, 2400);
+        }
+
+        /**
+         * Updates the send button and quick action button states
+         */
+        function updateSendButtonState() {
+            if (!messageInput || !sendBtn) return;
+            const hasText = messageInput.value.trim().length > 0;
+            sendBtn.disabled = !hasText || isGenerating;
+            document.querySelectorAll('.quick-action-btn').forEach(btn => {
+                btn.disabled = isGenerating;
+            });
+        }
+
+        /**
+         * Updates the active topic UI badge and placeholder
+         */
+        function setActiveTopic(topic) {
+            currentTopic = topic;
+            if (!topicBadge || !topicBadgeText || !messageInput) return;
+            if (topic) {
+                topicBadgeText.textContent = topic;
+                topicBadge.classList.remove('hidden');
+                topicBadge.classList.add('inline-flex');
+                messageInput.placeholder = `Ask more about "${topic}" or enter a new topic...`;
+            } else {
+                topicBadge.classList.add('hidden');
+                topicBadge.classList.remove('inline-flex');
+                messageInput.placeholder = "Enter a topic of your interest (e.g., Energy, Solar System, AI)...";
+            }
+        }
+
+        /**
+         * Escapes HTML characters for safe user message rendering
+         */
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        /**
+         * Appends a user or assistant message bubble to the chat list
+         */
+        function appendMessage(role, text, isError = false, imageData = null, showReturnHome = false) {
+            if (!messagesList) return;
+
+            if (welcomeScreen && !welcomeScreen.classList.contains('hidden')) {
+                welcomeScreen.classList.add('hidden');
+            }
+            messagesList.classList.remove('hidden');
+            messagesList.classList.add('flex');
+
+            const wrapper = document.createElement('div');
+            wrapper.className = role === 'user'
+                ? 'flex justify-end'
+                : 'flex items-start space-x-2.5';
+
+            if (role === 'user') {
+                wrapper.innerHTML = `
+                    <div class="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 shadow-sm max-w-[85%] sm:max-w-[75%] text-sm sm:text-base whitespace-pre-wrap break-words">
+                        ${escapeHtml(text)}
+                    </div>
+                `;
+            } else {
+                const rawHtml = isError ? `<p class="text-rose-600 dark:text-rose-400">${escapeHtml(text)}</p>` : marked.parse(text);
+                const cleanHtml = DOMPurify.sanitize(rawHtml);
+
+                let imageBlock = '';
+                if (imageData?.loading) {
+                    imageBlock = `
+                        <div class="story-image-slot mt-3 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/70 p-6 flex flex-col items-center justify-center text-center space-y-2 animate-pulse">
+                            <svg class="w-6 h-6 text-emerald-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                            </svg>
+                            <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Drawing a colorful picture for your kids' story...</span>
+                        </div>
+                    `;
+                } else if (imageData?.url) {
+                    imageBlock = `
+                        <div class="story-image-slot mt-3 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
+                            <img src="${imageData.url}" alt="Kids story illustration" class="w-full h-auto object-cover rounded-xl" />
+                        </div>
+                    `;
+                }
+
+                const returnHomeBlock = showReturnHome ? `
+                    <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                        <button type="button" onclick="returnToHome()" class="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                            </svg>
+                            <span>Return to Home</span>
+                        </button>
+                    </div>
+                ` : '';
+
+                wrapper.innerHTML = `
+                    <div class="w-5 h-5 rounded-md bg-gradient-to-tr from-blue-600 to-indigo-500 p-0.5 flex items-center justify-center text-white flex-none shadow-sm mt-1 overflow-hidden">
+                        <img data-bot-avatar src="${currentBotAvatarUrl}" alt="Bot Avatar" class="w-full h-full object-cover object-top rounded-[4px]" />
+                    </div>
+                    <div class="flex flex-col items-start max-w-[85%] sm:max-w-[80%] group">
+                        <div class="bg-white dark:bg-slate-900 border ${isError ? 'border-rose-300 dark:border-rose-800' : 'border-slate-200/80 dark:border-slate-800'} text-slate-800 dark:text-slate-100 rounded-2xl rounded-tl-sm px-4 py-3.5 shadow-sm text-sm sm:text-base prose-ai break-words w-full">
+                            ${cleanHtml}
+                            ${imageBlock}
+                            ${returnHomeBlock}
+                        </div>
+                        <button type="button" onclick="copyMessageText(this)" class="mt-1.5 ml-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex items-center space-x-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                            <span>Copy</span>
+                        </button>
+                    </div>
+                `;
+            }
+
+            messagesList.appendChild(wrapper);
+            scrollToBottom();
+            return wrapper;
+        }
+
+        /**
+         * Generates a colorful kids' storybook illustration for the story using Gemini Image API
+         */
+        async function generateStoryImage(topic, storyText) {
+            const summarySnippet = storyText.replace(/[*#_]/g, '').slice(0, 280);
+            const payload = {
+                contents: [{
+                    role: 'user',
+                    parts: [{
+                        text: `Colorful, cheerful children's picture book illustration about "${topic}". Scene: ${summarySnippet}. Warm Pixar-style 3D children's storybook art, bright friendly characters, sunny vibrant colors, no text or words in the image.`
+                    }]
+                }],
+                generationConfig: {
+                    responseModalities: ['TEXT', 'IMAGE'],
+                    imageConfig: { aspectRatio: "16:9" }
+                }
+            };
+
+            let delay = 1000;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    const response = await fetch(IMAGE_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) {
+                        if ((response.status === 429 || response.status >= 500) && attempt < 2) {
+                            await new Promise(r => setTimeout(r, delay));
+                            delay *= 2;
+                            continue;
+                        }
+                        break;
+                    }
+                    const result = await response.json();
+                    const part = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data);
+                    if (part?.inlineData?.data) {
+                        return `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+                    }
+                    break;
+                } catch (e) {
+                    if (attempt === 2) break;
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+            }
+            return buildKidsStoryFallbackSvg(topic);
+        }
+
+        /**
+         * Scrolls the chat container smoothly to the bottom
+         */
+        function scrollToBottom() {
+            if (!chatContainer) return;
+            chatContainer.scrollTo({
+                top: chatContainer.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+
+        /**
+         * Copies the plain text of an AI message bubble to the clipboard
+         */
+        function copyMessageText(buttonEl) {
+            const bubble = buttonEl?.previousElementSibling;
+            if (!bubble) return;
+            const textToCopy = bubble.innerText.trim();
+            const textarea = document.createElement('textarea');
+            textarea.value = textToCopy;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast('Copied to clipboard');
+            } catch (err) {
+                showToast('Unable to copy text');
+            }
+            document.body.removeChild(textarea);
+        }
+
+        /**
+         * Calls the Gemini text API with exponential backoff retry logic
+         */
+        async function fetchGeminiResponse() {
+            const payload = {
+                contents: conversationHistory,
+                systemInstruction: SYSTEM_INSTRUCTION
+            };
+
+            let delay = 1000;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) {
+                        if ((response.status === 429 || response.status >= 500) && attempt < 2) {
+                            await new Promise(r => setTimeout(r, delay));
+                            delay *= 2;
+                            continue;
+                        }
+                        throw new Error(`API error: ${response.status}`);
+                    }
+                    const result = await response.json();
+                    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!text) throw new Error('Empty response from model');
+                    return text;
+                } catch (err) {
+                    if (attempt === 2) throw err;
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        /**
+         * Generates structured JSON data for 5 educational slides
+         */
+        async function fetchStructuredSlides(topic) {
+            const payload = {
+                contents: [{
+                    role: 'user',
+                    parts: [{
+                        text: `Create a 5-slide educational presentation about "${topic}". Each slide must cover an important aspect or key concept of "${topic}" with a clear title, a short 2-3 sentence explanation (bold key terms using **term**), and a vivid visual scene description for an educational illustration (no text in the image).`
+                    }]
+                }],
+                systemInstruction: SYSTEM_INSTRUCTION,
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                slideNumber: { type: "INTEGER" },
+                                title: { type: "STRING" },
+                                explanation: { type: "STRING" },
+                                visualPrompt: { type: "STRING" }
+                            },
+                            required: ["slideNumber", "title", "explanation", "visualPrompt"]
+                        }
+                    }
+                }
+            };
+
+            let delay = 1000;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) {
+                        if ((response.status === 429 || response.status >= 500) && attempt < 2) {
+                            await new Promise(r => setTimeout(r, delay));
+                            delay *= 2;
+                            continue;
+                        }
+                        throw new Error(`API error: ${response.status}`);
+                    }
+                    const result = await response.json();
+                    const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!jsonText) throw new Error('Empty slide data');
+                    return JSON.parse(jsonText).slice(0, 5);
+                } catch (err) {
+                    if (attempt === 2) throw err;
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        /**
+         * Generates a clean educational slide illustration using Gemini Image API
+         */
+        async function generateSlideImage(topic, slide) {
+            const payload = {
+                contents: [{
+                    role: 'user',
+                    parts: [{
+                        text: `Clean, modern, vibrant educational presentation illustration about "${topic}" - ${slide.title}. Visual scene: ${slide.visualPrompt}. High-clarity digital vector and 3D editorial illustration style, bright engaging lighting, no words, letters, or text inside the artwork.`
+                    }]
+                }],
+                generationConfig: {
+                    responseModalities: ['IMAGE'],
+                    imageConfig: { aspectRatio: "16:9" }
+                }
+            };
+
+            let delay = 1000;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    const response = await fetch(IMAGE_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) {
+                        if ((response.status === 429 || response.status >= 500) && attempt < 2) {
+                            await new Promise(r => setTimeout(r, delay));
+                            delay *= 2;
+                            continue;
+                        }
+                        return null;
+                    }
+                    const result = await response.json();
+                    const part = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                    if (part?.inlineData?.data) {
+                        return `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+                    }
+                    return null;
+                } catch (e) {
+                    if (attempt === 2) return null;
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+            }
+            return null;
+        }
+
+        /**
+         * Renders an interactive 5-slide visual carousel and generates pictures for all 5 slides
+         */
+        async function generateVisualSlidesPresentation(topic) {
+            if (isGenerating) return;
+            isGenerating = true;
+            updateSendButtonState();
+
+            appendMessage('user', '4. Show slides');
+            conversationHistory.push({
+                role: 'user',
+                parts: [{ text: `Show 5 visual slides with pictures and short explanations about "${topic}".` }]
+            });
+
+            if (typingIndicator) {
+                typingIndicator.classList.remove('hidden');
+                typingIndicator.classList.add('flex');
+            }
+            scrollToBottom();
+
+            try {
+                const slides = await fetchStructuredSlides(topic);
+                if (typingIndicator) {
+                    typingIndicator.classList.add('hidden');
+                    typingIndicator.classList.remove('flex');
+                }
+
+                if (welcomeScreen && !welcomeScreen.classList.contains('hidden')) {
+                    welcomeScreen.classList.add('hidden');
+                }
+                messagesList.classList.remove('hidden');
+                messagesList.classList.add('flex');
+
+                const deckId = 'deck-' + Date.now();
+                let activeIdx = 0;
+                const slideImages = new Array(slides.length).fill(null);
+                const slideStatus = new Array(slides.length).fill('loading');
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'flex items-start space-x-2.5';
+
+                const slidesHtml = slides.map((s, idx) => {
+                    const cleanExplanation = DOMPurify.sanitize(marked.parse(s.explanation));
+                    return `
+                        <div class="slide-panel ${idx === 0 ? 'block' : 'hidden'}" data-slide-idx="${idx}">
+                            <div class="slide-img-box relative w-full aspect-video rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 flex flex-col items-center justify-center text-center p-4">
+                                <svg class="w-6 h-6 text-amber-500 animate-spin mb-2" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                </svg>
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Generating picture for Slide ${idx + 1} of ${slides.length}...</span>
+                            </div>
+                            <div class="mt-3">
+                                <div class="flex items-center space-x-2 mb-1">
+                                    <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300">Slide ${idx + 1} / ${slides.length}</span>
+                                    <h3 class="font-bold text-base sm:text-lg text-slate-900 dark:text-white leading-snug">${escapeHtml(s.title)}</h3>
+                                </div>
+                                <div class="text-sm sm:text-base text-slate-700 dark:text-slate-200 prose-ai mt-1.5">
+                                    ${cleanExplanation}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                const dotsHtml = slides.map((_, idx) => `
+                    <button type="button" data-dot-idx="${idx}" aria-label="Go to slide ${idx + 1}" class="slide-dot h-2 rounded-full transition-all ${idx === 0 ? 'w-6 bg-amber-500' : 'w-2 bg-slate-300 dark:bg-slate-700 hover:bg-amber-400'}"></button>
+                `).join('');
+
+                wrapper.innerHTML = `
+                    <div class="w-5 h-5 rounded-md bg-gradient-to-tr from-blue-600 to-indigo-500 p-0.5 flex items-center justify-center text-white flex-none shadow-sm mt-1 overflow-hidden">
+                        <img data-bot-avatar src="${currentBotAvatarUrl}" alt="Bot Avatar" class="w-full h-full object-cover object-top rounded-[4px]" />
+                    </div>
+                    <div id="${deckId}" class="flex flex-col items-start max-w-[92%] sm:max-w-[85%] w-full">
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl rounded-tl-sm p-4 shadow-sm w-full">
+                            ${slidesHtml}
+                            <!-- Slide Navigation Controls -->
+                            <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                                <button type="button" class="prev-slide-btn inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors" disabled>
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg>
+                                    <span>Previous</span>
+                                </button>
+                                <div class="flex items-center space-x-1.5">
+                                    ${dotsHtml}
+                                </div>
+                                <button type="button" class="next-slide-btn inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                                    <span>Next</span>
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>
+                                </button>
+                            </div>
+                            <!-- Return to Home Button -->
+                            <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                                <button type="button" onclick="returnToHome()" class="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                                    </svg>
+                                    <span>Return to Home</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                messagesList.appendChild(wrapper);
+                scrollToBottom();
+
+                const deckEl = document.getElementById(deckId);
+                const panels = deckEl.querySelectorAll('.slide-panel');
+                const dots = deckEl.querySelectorAll('.slide-dot');
+                const prevBtn = deckEl.querySelector('.prev-slide-btn');
+                const nextBtn = deckEl.querySelector('.next-slide-btn');
+
+                function showSlide(newIdx) {
+                    activeIdx = Math.max(0, Math.min(slides.length - 1, newIdx));
+                    panels.forEach((p, i) => {
+                        p.classList.toggle('hidden', i !== activeIdx);
+                        p.classList.toggle('block', i === activeIdx);
+                    });
+                    dots.forEach((d, i) => {
+                        if (i === activeIdx) {
+                            d.className = 'slide-dot h-2 w-6 rounded-full bg-amber-500 transition-all';
+                        } else {
+                            d.className = 'slide-dot h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-700 hover:bg-amber-400 transition-all';
+                        }
+                    });
+                    prevBtn.disabled = activeIdx === 0;
+                    nextBtn.disabled = activeIdx === slides.length - 1;
+                }
+
+                prevBtn.addEventListener('click', () => showSlide(activeIdx - 1));
+                nextBtn.addEventListener('click', () => showSlide(activeIdx + 1));
+                dots.forEach((dot, idx) => {
+                    dot.addEventListener('click', () => showSlide(idx));
+                });
+
+                const summaryText = slides.map(s => `Slide ${s.slideNumber}: ${s.title} - ${s.explanation}`).join('\n');
+                conversationHistory.push({
+                    role: 'model',
+                    parts: [{ text: summaryText }]
+                });
+
+                // Generate illustrations for all 5 slides in parallel
+                await Promise.all(slides.map(async (slide, idx) => {
+                    const imgUrl = await generateSlideImage(topic, slide);
+                    const imgBox = panels[idx]?.querySelector('.slide-img-box');
+                    if (!imgBox) return;
+                    if (imgUrl) {
+                        slideImages[idx] = imgUrl;
+                        slideStatus[idx] = 'done';
+                        imgBox.className = 'slide-img-box relative w-full aspect-video rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 shadow-xs';
+                        imgBox.innerHTML = `<img src="${imgUrl}" alt="${escapeHtml(slide.title)}" class="w-full h-full object-cover" />`;
+                        if (idx === activeIdx) scrollToBottom();
+                    } else {
+                        slideStatus[idx] = 'error';
+                        imgBox.className = 'slide-img-box relative w-full py-6 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/60 flex items-center justify-center text-xs text-amber-700 dark:text-amber-300';
+                        imgBox.textContent = `Slide ${idx + 1}: ${slide.title}`;
+                    }
+                }));
+
+            } catch (error) {
+                if (typingIndicator) {
+                    typingIndicator.classList.add('hidden');
+                    typingIndicator.classList.remove('flex');
+                }
+                appendMessage('model', 'Sorry, I encountered an issue creating the visual slides. Please try again.', true);
+                conversationHistory.pop();
+            } finally {
+                isGenerating = false;
+                updateSendButtonState();
+                if (messageInput) messageInput.focus();
+            }
+        }
+
+        /**
+         * Sends a user message and displays the AI response
+         */
+        async function sendPrompt(displayText, apiPromptText, options = {}) {
+            if (isGenerating) return;
+            isGenerating = true;
+            updateSendButtonState();
+
+            appendMessage('user', displayText);
+            conversationHistory.push({
+                role: 'user',
+                parts: [{ text: apiPromptText }]
+            });
+
+            if (typingIndicator) {
+                typingIndicator.classList.remove('hidden');
+                typingIndicator.classList.add('flex');
+            }
+            scrollToBottom();
+
+            try {
+                const replyText = await fetchGeminiResponse();
+                if (typingIndicator) {
+                    typingIndicator.classList.add('hidden');
+                    typingIndicator.classList.remove('flex');
+                }
+
+                conversationHistory.push({
+                    role: 'model',
+                    parts: [{ text: replyText }]
+                });
+
+                const withStoryImage = Boolean(options.withStoryImage);
+                const showReturnHome = Boolean(options.showReturnHome);
+                const msgWrapper = appendMessage(
+                    'model',
+                    replyText,
+                    false,
+                    withStoryImage ? { loading: true } : null,
+                    showReturnHome
+                );
+
+                if (withStoryImage && msgWrapper) {
+                    const storyImgUrl = await generateStoryImage(currentTopic, replyText);
+                    const slot = msgWrapper.querySelector('.story-image-slot');
+                    if (slot && storyImgUrl) {
+                        slot.className = 'story-image-slot mt-3 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm';
+                        slot.innerHTML = `<img src="${storyImgUrl}" alt="Kids story illustration" class="w-full h-auto object-cover rounded-xl" />`;
+                        scrollToBottom();
+                    }
+                }
+            } catch (error) {
+                if (typingIndicator) {
+                    typingIndicator.classList.add('hidden');
+                    typingIndicator.classList.remove('flex');
+                }
+                appendMessage('model', 'Sorry, I ran into a network issue while generating a response. Please try again.', true);
+                conversationHistory.pop();
+            } finally {
+                isGenerating = false;
+                updateSendButtonState();
+                if (messageInput) messageInput.focus();
+            }
+        }
+
+        /**
+         * Handles the 4 quick-action buttons
+         */
+        function triggerQuickAction(actionType) {
+            if (!currentTopic) {
+                showToast('Please enter a topic first!');
+                if (messageInput) messageInput.focus();
+                return;
+            }
+
+            if (actionType === 'slides') {
+                generateVisualSlidesPresentation(currentTopic);
+                return;
+            }
+
+            const actionMap = {
+                concepts: {
+                    label: '1. Key concepts',
+                    prompt: `Create a numbered list of 20 key concepts related to "${currentTopic}", with a clear, concise definition for each term (bold each term followed by its definition).`
+                },
+                phrases: {
+                    label: '2. Short phrases',
+                    prompt: `Write 5 clear, memorable short phrases or example sentences using the key concepts of "${currentTopic}". Bold each key concept.`
+                },
+                story: {
+                    label: '3. Read a story',
+                    prompt: `Write a fun, heartwarming, easy-to-understand story for kids about "${currentTopic}" structured into EXACTLY three paragraphs: Paragraph 1 for the **Beginning** (introducing friendly kid characters and an everyday curiosity or setting), Paragraph 2 for the **Development** (a fun discovery or playful challenge they explore together), and Paragraph 3 for the **Ending** (a happy resolution and simple takeaway). Naturally weave in and **bold** the key concepts of "${currentTopic}" throughout the three paragraphs.`,
+                    withStoryImage: true
+                }
+            };
+
+            const selected = actionMap[actionType];
+            if (selected) {
+                sendPrompt(selected.label, selected.prompt, {
+                    withStoryImage: Boolean(selected.withStoryImage),
+                    showReturnHome: true
+                });
+            }
+        }
+
+        /**
+         * Returns the user back to the Home welcome screen while keeping the current topic saved
+         */
+        function returnToHome() {
+            if (isGenerating) return;
+            if (messagesList) {
+                messagesList.innerHTML = '';
+                messagesList.classList.add('hidden');
+                messagesList.classList.remove('flex');
+            }
+            if (welcomeScreen) {
+                welcomeScreen.classList.remove('hidden');
+            }
+            if (chatContainer) {
+                chatContainer.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+            if (messageInput) {
+                messageInput.value = '';
+                messageInput.style.height = 'auto';
+                messageInput.focus();
+            }
+            updateSendButtonState();
+            showToast(currentTopic ? `Returned to Home (Topic: ${currentTopic})` : 'Returned to Home');
+        }
+
+        /**
+         * Initializes DOM element references and attaches event listeners safely
+         */
+        function initApp() {
+            chatContainer = document.getElementById('chatContainer');
+            welcomeScreen = document.getElementById('welcomeScreen');
+            messagesList = document.getElementById('messagesList');
+            typingIndicator = document.getElementById('typingIndicator');
+            chatForm = document.getElementById('chatForm');
+            messageInput = document.getElementById('messageInput');
+            sendBtn = document.getElementById('sendBtn');
+            clearBtn = document.getElementById('clearBtn');
+            topicBadge = document.getElementById('topicBadge');
+            topicBadgeText = document.getElementById('topicBadgeText');
+            toastContainer = document.getElementById('toastContainer');
+            toastText = document.getElementById('toastText');
+
+            if (chatForm && messageInput) {
+                chatForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const text = messageInput.value.trim();
+                    if (!text || isGenerating) return;
+
+                    messageInput.value = '';
+                    messageInput.style.height = 'auto';
+                    updateSendButtonState();
+
+                    const isOnHomeScreen = welcomeScreen && !welcomeScreen.classList.contains('hidden');
+                    if (!currentTopic || isOnHomeScreen) {
+                        conversationHistory = [];
+                        setActiveTopic(text);
+                        sendPrompt(
+                            text,
+                            `Explain the topic "${text}" clearly and engagingly as a summary of ONLY ONE concise paragraph (no bullet points or extra paragraphs), then invite me to explore it further using the 4 learning options.`,
+                            { showReturnHome: true }
+                        );
+                    } else {
+                        sendPrompt(text, text, { showReturnHome: true });
+                    }
+                });
+
+                messageInput.addEventListener('input', () => {
+                    messageInput.style.height = 'auto';
+                    messageInput.style.height = Math.min(messageInput.scrollHeight, 144) + 'px';
+                    updateSendButtonState();
+                });
+
+                messageInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!sendBtn.disabled) {
+                            chatForm.dispatchEvent(new Event('submit'));
+                        }
+                    }
+                });
+            }
+
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                    if (isGenerating) return;
+                    conversationHistory = [];
+                    setActiveTopic('');
+                    if (messagesList) {
+                        messagesList.innerHTML = '';
+                        messagesList.classList.add('hidden');
+                        messagesList.classList.remove('flex');
+                    }
+                    if (welcomeScreen) {
+                        welcomeScreen.classList.remove('hidden');
+                    }
+                    if (messageInput) {
+                        messageInput.value = '';
+                        messageInput.style.height = 'auto';
+                        messageInput.focus();
+                    }
+                    updateSendButtonState();
+                    showToast('Conversation reset');
+                });
+            }
+
+            applyBotAvatar(FALLBACK_AVATAR_SVG);
+            loadGeneratedBotAvatar();
+            updateSendButtonState();
+            if (messageInput) messageInput.focus();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initApp);
+        } else {
+            initApp();
+        }
+    </script>
+</body>
+</html>
